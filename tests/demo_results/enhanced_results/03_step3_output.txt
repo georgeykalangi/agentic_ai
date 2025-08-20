@@ -1,0 +1,373 @@
+Step 3 Output:
+Agentic AI design patterns offer proven solutions to common challenges in building autonomous and intelligent agents. These patterns provide blueprints for structuring agent behavior, enabling them to perceive, reason, and act effectively within their environments. Here's a detailed look at several key design patterns:
+
+**1. The Observer Pattern (Perception and Awareness)**
+
+*   **Concept:** Enables an agent to monitor its environment and react to changes. The agent (the Observer) registers with one or more environmental components (the Subjects). When a Subject's state changes, it notifies all registered Observers. This decouples the agent from direct dependency on specific sensors or data sources, promoting modularity and flexibility.
+
+*   **Practical Example:** A smart home system utilizes the Observer pattern. Various sensors (temperature, motion, door/window sensors – the Subjects) monitor the environment. The central control system (the Observer) registers with these sensors. When a sensor detects a change (e.g., a door opens), it notifies the control system, which then triggers actions like turning on lights, adjusting the thermostat, sending an alert to the homeowner's smartphone, or logging the event for security purposes. Imagine a sprinkler system: rain sensors (Subjects) notify the sprinkler controller (Observer) to prevent unnecessary watering.
+
+*   **Implementation Considerations:**
+    *   **Scalability:** Handling a large number of Subjects and Observers can impact performance. Employ techniques like asynchronous notifications (using message queues like RabbitMQ or Kafka) or filtering mechanisms (only notifying observers interested in specific events) to mitigate this. Consider using a publish-subscribe model offered by cloud platforms like AWS SNS or Azure Event Grid for highly scalable solutions.
+    *   **Granularity:** Fine-tune the level of detail in the notifications. Too much irrelevant information overwhelms the Observer; too little leads to missed opportunities or incorrect actions. Define specific event types (e.g., "TemperatureAboveThreshold," "MotionDetected") for efficient filtering and targeted responses.
+    *   **Latency:** Minimize the time it takes for a Subject to notify an Observer, especially in real-time applications. Optimize the notification process (e.g., using efficient data serialization formats like Protocol Buffers or MessagePack) and consider using lightweight communication protocols (e.g., UDP for non-critical data).
+    *   **Error Handling:** Implement robust error handling to prevent notification failures from disrupting the system. Subjects should handle potential exceptions gracefully, potentially retrying notifications or logging errors for later analysis. Observers should also be resilient to malformed or unexpected notifications.
+    *   **Threading:** Observer pattern implementations often involve multi-threading. Consider thread safety and use appropriate locking mechanisms when observers and subjects are accessed and modified concurrently.
+    *   **Example Code (Python):**
+
+    ```python
+    import time
+    import threading
+
+    class Subject:
+        def __init__(self):
+            self._observers = []
+            self._lock = threading.Lock() # For thread safety
+
+        def attach(self, observer):
+            with self._lock:
+                self._observers.append(observer)
+
+        def detach(self, observer):
+            with self._lock:
+                self._observers.remove(observer)
+
+        def notify(self, event):
+            with self._lock:  # Ensure thread-safe iteration
+                for observer in self._observers:
+                    # Use a thread to call update asynchronously
+                    threading.Thread(target=observer.update, args=(event,)).start()
+
+
+    class Observer:
+        def update(self, event):
+            raise NotImplementedError
+
+    class Thermometer(Subject):
+        def __init__(self):
+            super().__init__()
+            self._temperature = 20  # Initial temperature
+            self._lock = threading.Lock()
+
+        def get_temperature(self):
+            with self._lock:
+                return self._temperature
+
+        def set_temperature(self, temperature):
+            with self._lock:
+                if self._temperature != temperature:
+                    self._temperature = temperature
+                    self.notify(temperature)
+
+        def simulate_temperature_change(self):
+            # Simulate temperature fluctuations
+            import random
+            new_temperature = round(self._temperature + random.uniform(-1, 1), 1)
+            self.set_temperature(new_temperature)
+
+    class TemperatureDisplay(Observer):
+        def __init__(self, name):
+            self.name = name
+
+        def update(self, temperature):
+            print(f"{self.name}: Temperature updated to {temperature}°C")
+
+    class TemperatureAlert(Observer): #New Observer example
+        def __init__(self, threshold, alert_message):
+            self.threshold = threshold
+            self.alert_message = alert_message
+
+        def update(self, temperature):
+            if temperature > self.threshold:
+                print(f"Alert: {self.alert_message} (Temperature: {temperature}°C)")
+
+
+    # Example Usage
+    thermometer = Thermometer()
+    display1 = TemperatureDisplay("Living Room Display")
+    display2 = TemperatureDisplay("Bedroom Display")
+    alert = TemperatureAlert(25, "High temperature detected!") #New Alert
+
+    thermometer.attach(display1)
+    thermometer.attach(display2)
+    thermometer.attach(alert) #Attach the alert observer
+
+    # Simulate temperature changes over time
+    for _ in range(5):
+        thermometer.simulate_temperature_change()
+        time.sleep(1)
+    ```
+
+**2. The Goal-Oriented Action Planning (GOAP) Pattern (Reasoning and Planning)**
+
+*   **Concept:** Enables an agent to achieve specific goals by planning a sequence of actions. It involves defining a set of possible actions, each with preconditions (what must be true before the action can be executed) and effects (what changes after the action is executed). The agent searches for a plan that transforms the current world state into a desired goal state. GOAP excels in dynamic environments where unforeseen events can disrupt pre-defined plans, requiring the agent to replan and adapt.
+
+*   **Practical Example:** Consider an AI assistant tasked with "delivering a package." Actions could include "pick up package," "navigate to address," "ring doorbell," "hand over package." Preconditions for "hand over package" might include "at delivery address" and "package in hand". If the assistant encounters a blocked road during "navigate to address", it needs to dynamically replan, potentially choosing an alternative route or notifying the sender of the delay. Another example is a game AI character needing a sword. If it doesn't have one, GOAP will lead it to find actions like "find a blacksmith" and "buy a sword," or "explore dungeon" and "find a sword."
+
+*   **Implementation Considerations:**
+    *   **Action Representation:** Represent actions and their preconditions/effects using a formal language like STRIPS (Stanford Research Institute Problem Solver) or PDDL (Planning Domain Definition Language). These languages allow for formal specification of actions, facilitating automated reasoning. Consider using libraries specifically designed for planning, such as `pyhop` in Python.
+    *   **Search Algorithm:** Choose an efficient search algorithm. A* search is commonly used, but consider alternatives like Hierarchical Task Network (HTN) planning for complex tasks with pre-defined plan structures. For real-time applications, consider using incremental A* algorithms like D* Lite, which can efficiently update the plan as the environment changes.
+    *   **Heuristics:** Guide the search process with heuristics that estimate the distance to the goal state. For example, a heuristic could prioritize actions that satisfy the most preconditions. An admissible heuristic (never overestimates the cost to reach the goal) is crucial for A* to guarantee finding the optimal plan.
+    *   **Complexity:** GOAP can be computationally expensive, especially for large action spaces and complex goals. Manage complexity using hierarchical planning (breaking down goals into sub-goals) or action abstraction (grouping related actions into higher-level actions). Consider using action costs to penalize less desirable actions.
+    *   **Dynamic Replanning:** Implement mechanisms for replanning when the environment changes or actions fail. The agent should be able to sense environmental changes (using the Observer pattern, perhaps) and re-evaluate its plan based on new information. Implement time limits for planning to prevent the agent from getting stuck in an endless planning loop.
+    *   **Action Costs:** Assign numerical costs to actions representing resources used or time taken. This allows the planning algorithm to favor efficient plans.
+    *   **Example (Conceptual):**
+
+        ```
+        Goal: Have wood
+
+        Actions:
+            * Chop Tree:
+                Precondition: Near a tree, have axe, axe durability > 0
+                Effect:   Have wood, axe durability decreases
+
+            * Get Axe:
+                Precondition: Have money
+                Effect:  Have axe, not have money
+
+            * Move to Tree:
+                Precondition: None
+                Effect:  Near a tree
+
+            * Buy Axe:
+                Precondition: Have money
+                Effect: Have axe, not have money
+
+            * Repair Axe:
+                Precondition: Have Hammer, have Axe
+                Effect: Axe durability maxed, no hammer
+
+        Initial State: No Wood, Far from Tree, No Axe, No money, Hammer
+
+        Plan (Backward chaining):
+
+        1.  Chop Tree (Need to satisfy preconditions - Near Tree, Have Axe, Axe Durability >0)
+        2.  Repair Axe (Need preconditions Axe and Hammer)
+        3.  Get Axe (Need to satisfy preconditions - Have Money)
+        4.  Buy Axe (Need to satisfy preconditions - None)
+        5.  Move to Tree (Need to satisfy preconditions - None)
+        ```
+
+**3. The Utility-Based Decision Making Pattern (Decision-Making)**
+
+*   **Concept:** Allows an agent to choose the best action from a set of options based on their perceived utility (value or benefit). Each possible action is evaluated based on multiple factors (e.g., cost, risk, reward, time), and a utility score is calculated. The agent then selects the action with the highest utility score. This approach enables agents to make rational decisions in uncertain environments, considering trade-offs between different factors.
+
+*   **Practical Example:** A self-driving car deciding whether to change lanes. The utility of "change lane" might be based on factors like: increased speed (reward), risk of collision (risk - negative utility), fuel consumption (cost - negative utility), time saved (reward), and comfort of passengers (subjective reward). A higher projected speed increases the utility, while a higher collision probability decreases it. The self-driving car calculates the utility of each lane change and selects the one with the highest utility or stays in its current lane if that has the highest utility. A medical diagnosis AI using Utility-Based Decision Making could decide on the best treatment option, considering factors like the probability of success, side effects (negative utility), cost, and patient preferences.
+
+*   **Implementation Considerations:**
+    *   **Utility Function:** Carefully define the utility function and assign appropriate weights to different factors based on the agent's objectives. Regularly review and adjust weights as the environment changes and the agent learns. Consider using techniques like AHP (Analytic Hierarchy Process) to determine the relative importance of different factors.
+    *   **Normalization:** Normalize the values of different factors (e.g., using min-max scaling or z-score normalization) to ensure they are on a comparable scale before calculating the utility score. This prevents factors with larger numerical ranges from dominating the utility calculation.
+    *   **Risk Assessment:** Incorporate risk assessment techniques, such as Monte Carlo simulations or sensitivity analysis, to estimate the potential downsides of each action. Adjust the utility score based on the level of risk. Risk-averse agents will penalize risky actions more heavily.
+    *   **Dynamic Re-evaluation:** Periodically re-evaluate the utility of actions as new information becomes available. This allows the agent to adapt its decisions to changing circumstances. Consider using techniques like Bayesian updating to incorporate new evidence and refine the utility estimates.
+    *   **Computational Cost:** Complex utility functions can be computationally expensive. Optimize the calculation process (e.g., using vectorized operations or caching intermediate results) or use approximation techniques (e.g., using a lookup table or a simplified utility function) to reduce the computational load.
+    *   **Subjectivity:** Utility functions often involve subjective factors (e.g., comfort, aesthetics). Consider using techniques like fuzzy logic or preference elicitation to capture these subjective preferences.
+    *   **Example Code (Python - simplified):**
+
+    ```python
+    class Action:
+        def __init__(self, name):
+            self.name = name
+
+        def calculate_utility(self, battery_level, dirt_level):
+            raise NotImplementedError
+
+    class VacuumForward(Action):
+        def __init__(self):
+            super().__init__("Vacuum Forward")
+
+        def calculate_utility(self, battery_level, dirt_level):
+            # Example utility calculation: higher dirt, higher utility, but drains battery
+            dirt_weight = 0.7
+            battery_weight = 0.2
+            utility = dirt_level * dirt_weight - (100 - battery_level) * battery_weight
+            return utility
+
+    class ReturnToCharger(Action):
+        def __init__(self):
+            super().__init__("Return to Charger")
+
+        def calculate_utility(self, battery_level, dirt_level):
+            # High utility when battery is low
+            battery_weight = 0.9
+            utility = (100 - battery_level) * battery_weight
+            return utility
+
+
+    def choose_best_action(actions, battery_level, dirt_level):
+        best_action = None
+        best_utility = float('-inf')
+
+        for action in actions:
+            utility = action.calculate_utility(battery_level, dirt_level)
+            if utility > best_utility:
+                best_utility = utility
+                best_action = action
+
+        return best_action
+
+    # Example Usage
+    vacuum_forward = VacuumForward()
+    return_to_charger = ReturnToCharger()
+
+    actions = [vacuum_forward, return_to_charger]
+
+    battery_level = 30
+    dirt_level = 70
+
+    best_action = choose_best_action(actions, battery_level, dirt_level)
+
+    print(f"Best action: {best_action.name}")
+
+
+    #Example of dynamic weights
+    if dirt_level > 90: #If very dirty, prioritize cleaning
+        VacuumForward().calculate_utility = lambda battery, dirt: dirt * 0.9 - (100 - battery) * 0.1
+    ```
+
+**4. The Finite State Machine (FSM) Pattern (Behavior Management)**
+
+*   **Concept:** Represents an agent's behavior as a set of states and transitions between those states. The agent can only be in one state at a time, and transitions are triggered by specific events or conditions. FSMs are suitable for modeling simple, reactive behaviors where the agent's actions depend on its current state and the input it receives.
+
+*   **Practical Example:** An automated traffic light system using FSM. States: "Green," "Yellow," "Red." Transitions are triggered by timers. After a certain duration in the "Green" state, the system transitions to the "Yellow" state, and so on. Another example is an enemy AI in a video game, which might have states like "Idle," "Patrolling," "Chasing," "Attacking," and "Dead." The transitions between these states are triggered by events like "sees enemy," "enemy out of range," or "health reaches zero." A vending machine is another good example: "Idle", "Selecting Product", "Accepting Payment", "Dispensing Product".
+
+*   **Implementation Considerations:**
+    *   **State Definition:** Clearly define the states and the conditions that trigger transitions between them. Use a state diagram (e.g., UML state diagram) to visualize the state machine and ensure that all possible states and transitions are accounted for.
+    *   **Transition Logic:** Implement the logic for each transition, including any actions that should be performed when the transition occurs (e.g., setting traffic light colors, playing an animation, sending a message). Use a transition table to clearly define the transitions between states based on different events.
+    *   **Complexity:** FSMs can become complex for agents with many states and transitions, leading to the "state explosion" problem. Consider using hierarchical state machines (HSMs) or behavior trees for more complex behaviors. HSMs allow you to nest state machines within other state machines, reducing complexity and improving modularity. Consider using statecharts, which are a visual formalism extending FSMs with features like hierarchy, concurrency, and communication.
+    *   **Readability:** Ensure the state machine is well-documented and easy to understand. Use meaningful state names and clear transition conditions. Use comments to explain the purpose of each state and transition.
+    *   **Event Handling:** Implement a robust event handling mechanism to process events and trigger transitions. Use a message queue or an event bus to decouple the event source from the state machine.
+    *   **Debugging:** Debugging FSMs can be challenging. Use logging to track the state transitions and events. Consider using visual debugging tools to inspect the state machine's state and execution flow.
+    *   **Example Code (Python):**
+
+    ```python
+    class FSM:
+        def __init__(self, initial_state):
+            self.current_state = initial_state
+            self.state_map = {} #Dictionary to hold states for easy access
+
+        def add_state(self, state):
+            self.state_map[state.name] = state
+
+        def change_state(self, new_state_name):
+            if new_state_name in self.state_map:
+                print(f"Transitioning from {self.current_state.name} to {new_state_name}") #Added print statement
+                self.current_state = self.state_map[new_state_name]
+            else:
+                print(f"Error: State '{new_state_name}' not found.")
+
+
+        def update(self, event):
+            # Delegate the event handling to the current state
+            self.current_state.handle_event(event, self)
+
+
+    class State:
+        def __init__(self, name):
+            self.name = name
+
+        def handle_event(self, event, fsm):
+            #Default event handler (does nothing) - override in subclasses
+            pass
+
+
+    class IdleState(State):
+        def __init__(self):
+            super().__init__("Idle")
+
+        def handle_event(self, event, fsm):
+            if event == "sees_enemy":
+                fsm.change_state("Attacking")
+            #Added handling for a new event from patrolling
+            elif event == "start_patrolling":
+                fsm.change_state("Patrolling")
+
+
+    class AttackingState(State):
+        def __init__(self):
+            super().__init__("Attacking")
+
+        def handle_event(self, event, fsm):
+            if event == "enemy_defeated":
+                fsm.change_state("Idle")
+            elif event == "enemy_lost":
+                 fsm.change_state("Patrolling")  # Resume patrolling
+
+
+    class PatrollingState(State): #New patrolling state
+        def __init__(self):
+            super().__init__("Patrolling")
+
+        def handle_event(self, event, fsm):
+             if event == "sees_enemy":
+                fsm.change_state("Attacking")
+             elif event == "patrol_complete":
+                fsm.change_state("Idle")
+
+
+
+    # Example Usage
+    fsm = FSM(IdleState()) # Initialize with instance of IdleState
+    fsm.add_state(IdleState()) # Add the state to the state_map
+    fsm.add_state(AttackingState()) # Add the state to the state_map
+    fsm.add_state(PatrollingState()) #Adding Patrolling state
+
+
+    # Simulate an event that triggers a transition
+    event = "sees_enemy"
+    fsm.update(event)
+
+    print(f"Current state: {fsm.current_state.name}")
+
+    event = "enemy_defeated"
+    fsm.update(event)
+
+    print(f"Current state: {fsm.current_state.name}")
+
+    event = "start_patrolling"
+    fsm.update(event)
+    print(f"Current state: {fsm.current_state.name}")
+
+    event = "patrol_complete"
+    fsm.update(event)
+    print(f"Current state: {fsm.current_state.name}")
+    ```
+
+**5. The Behavior Tree Pattern (Hierarchical Behavior)**
+
+*   **Concept:** A hierarchical structure that defines an agent's behavior as a tree of nodes. Each node represents a task or condition. The tree is traversed from the root, and the agent executes the nodes based on their type and status (e.g., success, failure, running). Behavior Trees provide a flexible and modular way to design complex agent behaviors, allowing for easy modification and reuse of behavior components. Unlike FSMs, behavior trees support concurrent behavior and are more scalable for complex AI.
+
+*   **Practical Example:** A robot vacuum cleaner using a Behavior Tree. The root node might be a Fallback (Selector) node that prioritizes "Recharge Battery" if the battery is low; otherwise, it executes the "Cleaning Cycle." The "Cleaning Cycle" branch could involve searching for dirty areas, vacuuming them, and navigating around obstacles. In a more complex example, consider a guard robot: The root node is a selector that chooses between "Handle Threat" and "Patrol". "Handle Threat" is a sequence that checks for a threat, approaches the threat, and engages the threat. "Patrol" is a sequence that chooses a patrol point and moves to the point. Another example: a customer service chatbot. The root is a selector between "Answer Question" and "Escalate to Human Agent". "Answer Question" checks the FAQ and knowledge base, "Escalate" routes the conversation to a human.
+
+*   **Implementation Considerations:**
+    *   **Node Design:** Design nodes to be modular, reusable, and context-independent. Use decorators to modify the behavior of nodes without changing their core logic. Common node types include:
+        *   **Sequence:** Executes its children in order until one fails.
+        *   **Selector (Fallback):** Executes its children in order until one succeeds.
+        *   **Parallel:** Executes its children in parallel.
+        *   **Condition:** Checks a condition and returns success or failure.
+        *   **Action:** Performs an action and returns success, failure, or running.
+        *   **Decorator:** Modifies the behavior of its child (e.g., Invert, Repeat, Succeeder).
+    *   **Tree Structure:** Carefully structure the tree to reflect the agent's desired behavior hierarchy. Consider using visual editors (e.g., Unreal Engine's Behavior Tree editor, or standalone tools like XNode) to design and debug behavior trees.
+    *   **Tick Rate:** Control the rate at which the tree is traversed (the tick rate) to balance responsiveness and performance. A higher tick rate increases responsiveness but also increases computational load. Decouple the tick rate from the game's frame rate to avoid performance issues.
+    *   **Debugging:** Debugging behavior trees can be challenging. Use visual debugging tools to inspect the tree's state and execution flow. Implement logging to track the execution path and node status. Consider using breakpoints to pause the execution at specific nodes.
+    *   **Memory Management:** Behavior trees can store state information within nodes. Carefully manage memory to avoid memory leaks and performance issues. Use object pooling to reuse node objects.
+    *   **Parallel Execution:** Some behavior tree implementations support parallel execution of nodes. This can improve performance but also introduces complexity. Use synchronization mechanisms (e.g., mutexes, semaphores) to prevent race conditions when accessing shared resources.
+    *   **Integration with Other Patterns:** Behavior Trees often integrate well with other patterns. For example, you can use the Observer pattern to feed sensory data into conditions within the Behavior Tree, or use Utility-Based Decision Making within an Action node to select the best action to perform.
+    *   **Example (Conceptual):**
+
+    ```
+    Root (Fallback - Selector)
+    |-- Battery Low? (Condition)  // If battery low returns true
+    |   |-- Recharge Battery (Action)  // Action: Go to charging station and charge
+    |-- Cleaning Cycle (Sequence) //Only reached if Battery Low is False
+    |   |-- Find Dirty Area (Action)
+    |   |-- Navigate To Area (Action)
+    |   |-- Vacuum Area (Action)
+    |   |-- Obstacle Detected? (Condition)
+    |   |   |-- Navigate Around Obstacle (Action)
+    |   |-- Low Suction (Condition)
+    |   |    |-- Empty Dustbin (Action) #ADDED - more complex behavior
+
+    ```
+
+These design patterns are not mutually exclusive; they can be combined to create more sophisticated agent behaviors. For instance, you might use the Observer pattern to feed sensory data into a Behavior Tree that controls an agent's actions, and then use Utility-Based Decision Making within a specific Behavior Tree node to select the most appropriate action. You might also combine FSMs for very basic tasks within a larger Behavior Tree structure. For example, a game AI might use a Behavior Tree for high-level decision-making (e.g., "attack," "defend," "retreat") and an FSM for controlling the specific movements and animations during the "attack" state. The specific patterns chosen will depend on the application requirements and the complexity of the environment in which the agent operates. A solid understanding of these patterns, coupled with well-defined goals, robust perception, and effective decision-making, will pave the way for building reliable and intelligent agentic AI systems. Consider also exploring other patterns like the Strategy pattern for selecting different algorithms for a task or the Composite pattern for building complex object structures.
+

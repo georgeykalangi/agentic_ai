@@ -1,0 +1,2 @@
+Original Prompt:
+Explain the Design Patterns for Agentic AI in detail, including practical examples and implementation considerations.
